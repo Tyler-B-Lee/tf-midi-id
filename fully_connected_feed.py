@@ -21,24 +21,33 @@ from __future__ import print_function
 
 import time
 
-from six.moves import xrange  # pylint: disable=redefined-builtin
-import tensorflow as tf
+# from six.moves import xrange  # pylint: disable=redefined-builtin
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 import input_data
 import midi
 
 
 # Basic model parameters as external flags.
-flags = tf.app.flags
-FLAGS = flags.FLAGS
-flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer.')
-flags.DEFINE_integer('hidden1', 1024, 'Number of units in hidden layer 1.')
-flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
-flags.DEFINE_integer('batch_size', 100, 'Batch size.  '
-                     'Must divide evenly into the dataset sizes.')
-flags.DEFINE_string('train_dir', 'midis', 'Directory to put the training data.')
+# flags = tf.app.flags
+# FLAGS = flags.FLAGS
+# flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+# flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer.')
+# flags.DEFINE_integer('hidden1', 1024, 'Number of units in hidden layer 1.')
+# flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
+# flags.DEFINE_integer('batch_size', 100, 'Batch size.  '
+#                      'Must divide evenly into the dataset sizes.')
+# flags.DEFINE_string('train_dir', 'midis', 'Directory to put the training data.')
 
+FLAGS = {
+  'learning_rate': 0.01,
+  'max_steps': 2000, 
+  'hidden1': 1024, 
+  'hidden2': 16, 
+  'batch_size': 100, 
+  'train_dir': 'midis'
+}
 
 def placeholder_inputs(batch_size):
   """Generate placeholder variables to represent the input tensors.
@@ -81,7 +90,7 @@ def fill_feed_dict(data_set, images_pl, labels_pl):
   """
   # Create the feed_dict for the placeholders filled with the next
   # `batch size ` examples.
-  images_feed, labels_feed = data_set.next_batch(FLAGS.batch_size)
+  images_feed, labels_feed = data_set.next_batch(FLAGS['batch_size'])
   feed_dict = {
       images_pl: images_feed,
       labels_pl: labels_feed,
@@ -106,9 +115,9 @@ def do_eval(sess,
   """
   # And run one epoch of eval.
   true_count = 0  # Counts the number of correct predictions.
-  steps_per_epoch = data_set.num_examples // FLAGS.batch_size
-  num_examples = steps_per_epoch * FLAGS.batch_size
-  for step in xrange(steps_per_epoch):
+  steps_per_epoch = data_set.num_examples // FLAGS['batch_size']
+  num_examples = steps_per_epoch * FLAGS['batch_size']
+  for step in range(steps_per_epoch):
     feed_dict = fill_feed_dict(data_set,
                                midi_data_placeholder,
                                labels_placeholder)
@@ -122,30 +131,30 @@ def run_training():
   """Train midi data for a number of steps."""
   # Get the sets of images and labels for training, validation, and
   # test on midi.
-  data_sets = input_data.read_data_sets(FLAGS.train_dir)
+  data_sets = input_data.read_data_sets(FLAGS['train_dir'])
 
   # Tell TensorFlow that the model will be built into the default Graph.
   with tf.Graph().as_default():
     # Generate placeholders for the images and labels.
     midi_data_placeholder, labels_placeholder = placeholder_inputs(
-        FLAGS.batch_size)
+        FLAGS['batch_size'])
 
     # Build a Graph that computes predictions from the inference model.
     logits = midi.inference(midi_data_placeholder,
-                             FLAGS.hidden1,
-                             FLAGS.hidden2)
+                             FLAGS['hidden1'],
+                             FLAGS['hidden2'])
 
     # Add to the Graph the Ops for loss calculation.
     loss = midi.loss(logits, labels_placeholder)
 
     # Add to the Graph the Ops that calculate and apply gradients.
-    train_op = midi.training(loss, FLAGS.learning_rate)
+    train_op = midi.training(loss, FLAGS['learning_rate'])
 
     # Add the Op to compare the logits to the labels during evaluation.
     eval_correct = midi.evaluation(logits, labels_placeholder)
 
     # Build the summary operation based on the TF collection of Summaries.
-    summary_op = tf.merge_all_summaries()
+    summary_op = tf.summary.merge_all()
 
     # Create a saver for writing training checkpoints.
     saver = tf.train.Saver()
@@ -154,14 +163,16 @@ def run_training():
     sess = tf.Session()
 
     # Run the Op to initialize the variables.
-    init = tf.initialize_all_variables()
+    # init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
     sess.run(init)
 
     # Instantiate a SummaryWriter to output summaries and the Graph.
-    summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, sess.graph)
+    # summary_writer = tf.train.SummaryWriter(FLAGS['train_dir'], sess.graph)
+    summary_writer = tf.summary.FileWriter(FLAGS['train_dir'], sess.graph)
 
     # And then after everything is built, start the training loop.
-    for step in xrange(FLAGS.max_steps):
+    for step in range(FLAGS['max_steps']):
       start_time = time.time()
 
       # Fill a feed dictionary with the actual set of images and labels
@@ -190,8 +201,8 @@ def run_training():
         summary_writer.flush()
 
       # Save a checkpoint and evaluate the model periodically.
-      if (step + 1) % 200 == 0 or (step + 1) == FLAGS.max_steps:
-        saver.save(sess, FLAGS.train_dir, global_step=step)
+      if (step + 1) % 200 == 0 or (step + 1) == FLAGS['max_steps']:
+        saver.save(sess, FLAGS['train_dir'], global_step=step)
         # Evaluate against the training set.
         print('Training Data Eval:')
         do_eval(sess,

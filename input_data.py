@@ -22,7 +22,8 @@ import os
 import math
 
 import numpy
-import tensorflow as tf
+# import tensorflow as tf
+# import tensorflow.compat.v1 as tf
 
 SAMPLE_DURATION_MILLIS = 10000
 SAMPLE_WINDOW_MILLIS = 100
@@ -31,7 +32,7 @@ INPUT_SIZE = int(SAMPLE_DURATION_MILLIS / SAMPLE_WINDOW_MILLIS * MAX_NOTE_VALUE)
 SAMPLE_SIZE = int(SAMPLE_DURATION_MILLIS / SAMPLE_WINDOW_MILLIS)
 
 
-COMPOSERS = {'bach': 0, 'children': 1}
+COMPOSERS = {'bach': 0, 'mozart': 1}
 
 def extract_midi_data(filename):
   midi_data = []
@@ -47,7 +48,7 @@ def extract_midi_data(filename):
   midi_data = sorted(midi_data, key=lambda event: event[0])
   data = None
   # artifically increase sample data by shifting the data into different windows
-  for x in xrange(SAMPLE_WINDOW_MILLIS):
+  for x in range(SAMPLE_WINDOW_MILLIS):
     while midi_data[0][0] < x:
       midi_data.pop(0)
     shiftdata = numpy.zeros((int(math.ceil(midi_data[-1][0]/SAMPLE_WINDOW_MILLIS))+1, MAX_NOTE_VALUE), dtype=int)
@@ -92,7 +93,6 @@ def extract_data(dirname):
       #    labels = numpy.vstack((labels, label))
 
   return DataSet(data, labels)
-
 
 class DataSet(object):
 

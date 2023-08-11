@@ -1,0 +1,6 @@
+model_checkpoint_path: "midis-1999"
+all_model_checkpoint_paths: "midis-1199"
+all_model_checkpoint_paths: "midis-1399"
+all_model_checkpoint_paths: "midis-1599"
+all_model_checkpoint_paths: "midis-1799"
+all_model_checkpoint_paths: "midis-1999"
