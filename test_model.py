@@ -21,6 +21,7 @@ from __future__ import print_function
 
 import os
 import numpy
+from matplotlib import pyplot as plt
 
 # from six.moves import xrange  # pylint: disable=redefined-builtin
 # import tensorflow as tf
@@ -29,14 +30,12 @@ import tensorflow.compat.v1 as tf
 import input_data
 import midi
 
-
-
 FLAGS = {
   'learning_rate': 0.01,
   'max_steps': 2000, 
   'hidden1': 1024, 
   'hidden2': 16, 
-  'batch_size': 100, 
+  'batch_size': 1, 
   'train_dir': 'midis'
 }
 
@@ -105,12 +104,27 @@ def do_eval(sess,
       input_data.read_data_sets().
   """
   # And run one epoch of eval.
-  steps_per_epoch = data_set.num_examples // FLAGS['batch_size']
+  steps_per_epoch = data_set.num_examples
+  ret = {i:[] for i in range(midi.NUM_CLASSES)}
   for step in range(steps_per_epoch):
     feed_dict = fill_feed_dict(data_set,
                                midi_data_placeholder,
                                labels_placeholder)
-    print(sess.run(eval_correct,feed_dict=feed_dict))
+    output = sess.run(eval_correct,feed_dict=feed_dict)[0]
+    for i in range(midi.NUM_CLASSES):
+      ret[i].append(output[i])
+  return ret
+
+def visualize_results(output_dict:dict):
+  fig, axs = plt.subplots(nrows=1,ncols=3,sharex=True,sharey=True,figsize=(12,6))
+  x = numpy.arange(len(output_dict[0]))
+  for i,ax in enumerate(axs):
+    ax.set_title(input_data.INDEX_TO_COMP[i])
+    ax.plot(x,output_dict[i])
+    ax.plot(x,[0]*len(x))
+  
+  fig.suptitle('Predicted Style Outputs')
+  plt.show()
 
 
 def run_test():
@@ -161,11 +175,22 @@ def run_test():
           break
 
         data_set = None
+        # for (dirpath, dirnames, filenames) in os.walk(input_dir):
+        #   for filename in [f for f in filenames if f.endswith('.csv')]:
+        #     if filename == target_name:
+        #       # build temporary dataset to use
+        #       midi_data = input_data.extract_midi_data_no_dup(os.path.join(dirpath,filename))
+        #       labels = numpy.array([0]*midi_data.shape[0])
+        #       data_set = input_data.DataSet(midi_data,labels)
+
         for (dirpath, dirnames, filenames) in os.walk(input_dir):
-          for filename in [f for f in filenames if f.endswith('.csv')]:
+          for filename in [f for f in filenames if f.endswith('.mid')]:
             if filename == target_name:
+              # translate midi file to csv
+              target_filename = rf"{dirpath}\{filename}"
+              os.system(f'midicsv "{target_filename}" "translated.csv"')
               # build temporary dataset to use
-              midi_data = input_data.extract_midi_data(os.path.join(dirpath,filename))
+              midi_data = input_data.extract_midi_data_no_dup('translated.csv')
               labels = numpy.array([0]*midi_data.shape[0])
               data_set = input_data.DataSet(midi_data,labels)
 
@@ -175,11 +200,13 @@ def run_test():
 
         # Evaluate against the file's data.
         print('Evaluating chosen file:')
-        do_eval(sess,
+        results = do_eval(sess,
                 logits,
                 midi_data_placeholder,
                 labels_placeholder,
                 data_set)
+        # visualize results
+        visualize_results(results)
 
 
 def main(_):

@@ -32,7 +32,8 @@ INPUT_SIZE = int(SAMPLE_DURATION_MILLIS / SAMPLE_WINDOW_MILLIS * MAX_NOTE_VALUE)
 SAMPLE_SIZE = int(SAMPLE_DURATION_MILLIS / SAMPLE_WINDOW_MILLIS)
 
 
-COMPOSERS = {'bach': 0, 'mozart': 1}
+COMPOSERS = {'bach': 0, 'beethoven': 1, 'rach': 2}
+INDEX_TO_COMP = {ind:comp for comp,ind in COMPOSERS.items()}
 
 def extract_midi_data(filename):
   midi_data = []
@@ -44,7 +45,7 @@ def extract_midi_data(filename):
       if fields[2] != 'Note_on_c':
         continue
       # time and note value
-      midi_data.append([float(fields[1]), int(fields[4])])
+      midi_data.append([float(fields[1]), int(fields[4]) - 21])
   midi_data = sorted(midi_data, key=lambda event: event[0])
   data = None
   # artifically increase sample data by shifting the data into different windows
@@ -70,6 +71,37 @@ def extract_midi_data(filename):
   
   return data.reshape((int(data.shape[0]/sample_data_length), int(data.shape[1]*sample_data_length)))
 
+def extract_midi_data_no_dup(filename):
+  midi_data = []
+  with open(filename) as f:
+    for line in f:
+      fields = line.split(', ')
+      if len(fields) < 5:
+        continue
+      if fields[2] != 'Note_on_c':
+        continue
+      if fields[5] == 0:
+        continue
+      # time and note value
+      midi_data.append([float(fields[1]), int(fields[4]) - 21])
+  midi_data = sorted(midi_data, key=lambda event: event[0])
+
+  # read the file once
+  data = numpy.zeros((int(math.ceil(midi_data[-1][0]/SAMPLE_WINDOW_MILLIS))+1, MAX_NOTE_VALUE), dtype=int)
+  for event in midi_data:
+    curtime = event[0]
+    note = event[1]
+    data[int(math.floor(curtime/SAMPLE_WINDOW_MILLIS)), note] += 1
+
+  # make sure we have full 10-second samples
+  sample_data_length = int(SAMPLE_DURATION_MILLIS/SAMPLE_WINDOW_MILLIS)
+  windows = int(data.shape[0]/sample_data_length)*sample_data_length
+  pad_length = sample_data_length + windows - data.shape[0]
+  data = numpy.pad(data,((0,pad_length),(0,0)),'constant',constant_values=0)
+
+  print('Read %d windows from %s' % (data.shape[0], filename))
+  
+  return data.reshape((int(data.shape[0]/sample_data_length), int(data.shape[1]*sample_data_length)))
 
 def extract_data(dirname):
   print('Extracting', dirname)
