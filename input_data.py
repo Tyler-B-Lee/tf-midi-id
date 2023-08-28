@@ -31,9 +31,86 @@ MAX_NOTE_VALUE = 100
 INPUT_SIZE = int(SAMPLE_DURATION_MILLIS / SAMPLE_WINDOW_MILLIS * MAX_NOTE_VALUE)
 SAMPLE_SIZE = int(SAMPLE_DURATION_MILLIS / SAMPLE_WINDOW_MILLIS)
 
-
-COMPOSERS = {'bach': 0, 'beethoven': 1, 'rach': 2}
+COMPOSERS = {'bach': 0, 'mozart': 1, 'beethoven': 2, 'chopin': 3, 'rach': 4}
 INDEX_TO_COMP = {ind:comp for comp,ind in COMPOSERS.items()}
+
+def convert_midi_to_ms(filename):
+  """
+  Attempts to convert a given midi file to an array of midi_data:
+  - [(start time of note in milliseconds), note number - 21 (adjusted to fit within 0 to 100), ...]
+
+  This is what is done in the original extract_midi_data function, but it assumes that the song is
+  saved with each midi data event equalling exactly 1 millisecond. This is not accurate for songs
+  that have a different tempo. In this function, a data structure is generated in the same format as
+  the original extraction function, but with the times adjusted.
+  """
+  tempo_changes = []
+  note_data = []
+  with open(filename, encoding='ISO-8859-1') as f:
+    for line in f:
+      fields = line.split(', ')
+      if fields[2] == 'Note_on_c':
+        # time and note value
+        if fields[5] == "0":
+          continue
+        note_data.append([int(fields[1]), int(fields[4]) - 21])
+      elif fields[2] == 'Tempo':
+        tempo_changes.append([int(fields[1]), int(fields[3])])
+      elif fields[2] == 'Header':
+        if fields[3] == "1":
+          conversion_constant = 500 / int(fields[5])
+        else:
+          print(f"\t\tINFO: Type 0? MIDI found with value {fields[5]} in {filename}")
+          conversion_constant = 9.6
+        
+  note_data = sorted(note_data, key=lambda event: event[0])
+  tempo_changes = sorted(tempo_changes, key=lambda event: event[0])
+
+  print(f"\tNotes found: {len(note_data)}")
+  print(f"\tTempo Marks found: {len(tempo_changes)}")
+
+  note_data_arr = numpy.array(note_data, dtype=numpy.int32)
+  if len(tempo_changes) == 0 or tempo_changes[0][0] != 0:
+    # print("\tInserting default tempo at time 0...")
+    tempo_changes.insert(0, [0,500_000])
+
+  # create scaled sections after each tempo change
+  scaled_sections = []
+  for tempo_change_index,tc in enumerate(tempo_changes):
+    # print(f"Tempo change {tempo_change_index}: Change to {tc[1]} at tick {tc[0]}")
+    start_tempo_tick = tc[0] # this is the tick in the unconverted song we start at
+    # we then find the index of the first note-on event to convert in the note data array
+    if tempo_change_index == 0:
+      start_nd_row = 0
+    else:
+      start_nd_row = max(numpy.argmax(note_data_arr[:,0] > start_tempo_tick), 0)
+    conversion_multiplier = tc[1] / 500_000 * conversion_constant
+    # find which notes we need to rescale
+    if tempo_change_index + 1 == len(tempo_changes):
+      # if are doing the last tempo change, take up to the last note
+      end_nd_row = len(note_data_arr)
+    else:
+      # otherwise, cut up until the next tempo change
+      end_tempo_tick = tempo_changes[tempo_change_index + 1][0]
+      end_nd_row = max(numpy.argmax(note_data_arr[:,0] > end_tempo_tick), 0)
+    
+    # print(f"\tStart / End Rows: {start_nd_row} - {end_nd_row}")
+    slice_to_convert = note_data_arr[start_nd_row:end_nd_row].copy()
+    slice_to_convert[:,0] -= start_tempo_tick
+    slice_to_convert[:,0] = (slice_to_convert[:,0] * conversion_multiplier).astype(numpy.int32)
+
+    scaled_sections.append(slice_to_convert)
+  
+  # combine all of the sections
+  out = numpy.zeros((0,2),dtype=numpy.int32)
+  a = 0
+  for section in scaled_sections:
+    section[:,0] += a
+    if len(section) > 0:
+      a = section[-1][0]
+    out = numpy.vstack((out,section))
+  
+  return out  
 
 def extract_midi_data(filename):
   midi_data = []
@@ -49,7 +126,7 @@ def extract_midi_data(filename):
   midi_data = sorted(midi_data, key=lambda event: event[0])
   data = None
   # artifically increase sample data by shifting the data into different windows
-  for x in range(SAMPLE_WINDOW_MILLIS):
+  for x in range(10):
     while midi_data[0][0] < x:
       midi_data.pop(0)
     shiftdata = numpy.zeros((int(math.ceil(midi_data[-1][0]/SAMPLE_WINDOW_MILLIS))+1, MAX_NOTE_VALUE), dtype=int)
@@ -71,20 +148,47 @@ def extract_midi_data(filename):
   
   return data.reshape((int(data.shape[0]/sample_data_length), int(data.shape[1]*sample_data_length)))
 
+def extract_midi_data_v2(filename):
+  data = convert_midi_to_ms(filename)
+  # # artifically increase sample data by shifting the data into different windows
+  # for x in range(SAMPLE_WINDOW_MILLIS):
+  #   while midi_data[0][0] < x:
+  #     # midi_data.pop(0)
+  #     midi_data = numpy.delete(midi_data, 0, 0)
+  #   shiftdata = numpy.zeros((int(math.ceil(midi_data[-1][0]/SAMPLE_WINDOW_MILLIS))+1, MAX_NOTE_VALUE), dtype=int)
+  #   for event in midi_data:
+  #     curtime = event[0]
+  #     note = event[1]
+  #     shiftdata[int(math.floor(curtime/SAMPLE_WINDOW_MILLIS)), note] += 1
+  #   if data is None:
+  #     data = shiftdata
+  #   else:
+  #     data = numpy.vstack((data, shiftdata))
+
+  # make sure we have full 10-second samples
+  sample_data_length = int(SAMPLE_DURATION_MILLIS/SAMPLE_WINDOW_MILLIS)
+  windows = int(data.shape[0]/sample_data_length)*sample_data_length
+  data = numpy.resize(data, (windows, data.shape[1]))
+
+  print('Read %d windows from %s' % (windows, filename))
+  
+  return data.reshape((int(data.shape[0]/sample_data_length), int(data.shape[1]*sample_data_length)))
+
 def extract_midi_data_no_dup(filename):
-  midi_data = []
-  with open(filename) as f:
-    for line in f:
-      fields = line.split(', ')
-      if len(fields) < 5:
-        continue
-      if fields[2] != 'Note_on_c':
-        continue
-      if fields[5] == 0:
-        continue
-      # time and note value
-      midi_data.append([float(fields[1]), int(fields[4]) - 21])
-  midi_data = sorted(midi_data, key=lambda event: event[0])
+  # midi_data = []
+  # with open(filename) as f:
+  #   for line in f:
+  #     fields = line.split(', ')
+  #     if len(fields) < 5:
+  #       continue
+  #     if fields[2] != 'Note_on_c':
+  #       continue
+  #     if fields[5] == 0:
+  #       continue
+  #     # time and note value
+  #     midi_data.append([float(fields[1]), int(fields[4]) - 21])
+  # midi_data = sorted(midi_data, key=lambda event: event[0])
+  midi_data = convert_midi_to_ms(filename)
 
   # read the file once
   data = numpy.zeros((int(math.ceil(midi_data[-1][0]/SAMPLE_WINDOW_MILLIS))+1, MAX_NOTE_VALUE), dtype=int)
@@ -112,7 +216,10 @@ def extract_data(dirname):
       labelval = COMPOSERS[os.path.split(dirpath)[-1]]
       #label = numpy.zeros(len(COMPOSERS), dtype=numpy.uint8)
       #label[labelval] = 1
-      midi_data = extract_midi_data(os.path.join(dirpath, filename))
+
+      midi_data = extract_midi_data_v2(os.path.join(dirpath, filename))
+      # midi_data = extract_midi_data(os.path.join(dirpath, filename))
+
       if data is None:
         data = midi_data
       else:

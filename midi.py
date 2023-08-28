@@ -37,7 +37,7 @@ import tensorflow.compat.v1 as tf
 # import tensorflow as tf
 
 # Bach or Mozart
-NUM_CLASSES = 3
+NUM_CLASSES = 5
 
 
 def inference(midi_data, hidden1_units, hidden2_units):

@@ -45,7 +45,8 @@ FLAGS = {
   'max_steps': 2000, 
   'hidden1': 1024, 
   'hidden2': 16, 
-  'batch_size': 100, 
+  'batch_size': 1, 
+  # 'batch_size': 100, 
   'train_dir': 'midis'
 }
 

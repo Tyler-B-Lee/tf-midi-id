@@ -15,10 +15,10 @@ for (dirpath, dirnames, filenames) in os.walk(target_dir):
         out_file_name = filename[:-4]
         target_filename = rf"{dirpath}\{filename}"
 
-        x = random.randint(1,20)
-        if x >= 1 and x <= 3:
+        x = random.randint(1,10)
+        if x == 1:
             outfile_path = rf".\midis\validation\{composer_name}\{out_file_name}.csv"
-        elif x >= 4 and x <= 6:
+        elif x == 2:
             outfile_path = rf".\midis\test\{composer_name}\{out_file_name}.csv"
         else:
             outfile_path = rf".\midis\train\{composer_name}\{out_file_name}.csv"

@@ -116,14 +116,21 @@ def do_eval(sess,
   return ret
 
 def visualize_results(output_dict:dict):
-  fig, axs = plt.subplots(nrows=1,ncols=3,sharex=True,sharey=True,figsize=(12,6))
   x = numpy.arange(len(output_dict[0]))
-  for i,ax in enumerate(axs):
-    ax.set_title(input_data.INDEX_TO_COMP[i])
-    ax.plot(x,output_dict[i])
-    ax.plot(x,[0]*len(x))
+
+  # fig, axs = plt.subplots(nrows=1,ncols=3,sharex=True,sharey=True,figsize=(12,6))
+  # for i,ax in enumerate(axs):
+  #   ax.set_title(input_data.INDEX_TO_COMP[i])
+  #   ax.plot(x,output_dict[i])
+  #   ax.plot(x,[0]*len(x))
   
-  fig.suptitle('Predicted Style Outputs')
+  plt.plot(x,[0]*len(x))
+  for i in range(len(output_dict)):
+    plt.plot(x,output_dict[i],label=input_data.INDEX_TO_COMP[i])
+  
+  plt.grid(axis='x', color='0.95')
+  plt.legend(title='Style:')
+  plt.title('Predicted Style Outputs')
   plt.show()
 
 
